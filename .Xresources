@@ -1,0 +1,50 @@
+! *utf8: 1
+! xterm*termName: xterm-256color
+xterm*font: -*-terminus-medium-*-*-*-14-*-*-*-*-*-iso10646-1
+Xcursor.theme: whiteglass
+Xcursor.size: 16
+*fading:                40
+*fadeColor:             #002b36
+
+xft.dpi:	96
+xft.antialias:	true
+xft.rgba:	rgb
+xft.hinting:	true
+xft.hintstyle:	hintslight
+
+! special
+*.foreground:   #33cc33
+*.background:   #000000
+*.cursorColor:  #33cc33
+
+! black
+*.color0:       #808080
+*.color8:       #333399
+
+! red
+*.color1:       #af0a0f
+*.color9:       #9999ff
+
+! green
+*.color2:       #00ccff
+*.color10:      #0099cc
+
+! yellow
+*.color3:       #3366cc
+*.color11:      #6699ff
+
+! blue
+*.color4:       #006699
+*.color12:      #0099cc
+
+! magenta
+*.color5:       #0066ff
+*.color13:      #0099ff
+
+! cyan
+*.color6:       #33cc33
+*.color14:      #66cccc
+
+! white
+*.color7:       #a756c6
+*.color15:      #5b2c94
