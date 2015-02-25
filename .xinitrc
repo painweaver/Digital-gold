@@ -48,7 +48,7 @@ xset fp rehash
 
 ~/startscripts/dwm-statusbar.bash &
 # ~/startscripts/startdwm
-
+# ~/fehscrip
 xrdb -merge ~/.Xresources
 xrandr --output LVDS --off
 xrandr --output VGA-0 --auto
