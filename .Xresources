@@ -3,6 +3,16 @@
 xterm*font: -*-terminus-medium-*-*-*-14-*-*-*-*-*-iso10646-1
 Xcursor.theme: whiteglass
 Xcursor.size: 16
+
+URxvt.font: -*-terminus-medium-*-*-*-14-*-*-*-*-*-iso10646-1
+URxvt.scrollBar: false
+! FOR TRUE TRANSPARENCY
+! URxvt.depth: 32
+! URxvt.background: [95]#000000
+URxvt*.transparent: true
+! URxvt*.shading: 0 to 99 darkens, 101 to 200 lightens
+URxvt*.shading: 40
+
 *fading:                40
 *fadeColor:             #002b36
 
