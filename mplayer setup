@@ -1,0 +1,4 @@
+in "/etc/mplayer/mplayer.conf" remove everything and add: nolirc=yes
+
+
+curl --ciphers RC4-SHA "$(youtube-dl -g https://www.youtube.com/watch?v=eyZQUEMZlCU&index=23&list=RDJ52rN0aNfYI)" | mplayer -
