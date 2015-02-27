@@ -33,7 +33,10 @@ set showcmd		" display incomplete commands
 set incsearch		" do incremental searching
 set wrapscan
 " set t_Co=16
+set nobackup
+set nowritebackup
 set clipboard=unnamedplus
+set number
 colorscheme cyber7
 
 " For Win32 GUI: remove 't' flag from 'guioptions': no tearoff menu entries
