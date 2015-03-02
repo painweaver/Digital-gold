@@ -30,7 +30,7 @@ xft.hintstyle:	hintslight
 *.cursorColor:  #33cc33
 
 ! black
-*.color0:       #808080
+*.color0:       #000000
 *.color8:       #333399
 
 ! red
