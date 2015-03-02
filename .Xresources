@@ -1,9 +1,11 @@
 ! *utf8: 1
-! xterm*termName: xterm-256color
+xterm*termName: xterm-256color
 xterm*font: -*-terminus-medium-*-*-*-14-*-*-*-*-*-iso10646-1
+! xterm*font: -xos4-TerminessPowerline-Medium-R-Normal--14-140-72-72-C-80-ISO10646-1
 Xcursor.theme: whiteglass
 Xcursor.size: 16
 
+! URxvt.font: -xos4-TerminessPowerline-Medium-R-Normal--14-140-72-72-C-80-ISO10646-1
 URxvt.font: -*-terminus-medium-*-*-*-14-*-*-*-*-*-iso10646-1
 URxvt.scrollBar: false
 ! FOR TRUE TRANSPARENCY
