@@ -1,0 +1,234 @@
+
+#!/usr/bin/bash
+
+loadkeys de-latin1-nodeadkeys
+ping -c 3 google.com
+timedatectl set-ntp true
+
+# https://wiki.archlinux.org/index.php/GNU_Parted
+
+lsblk
+parted -a optimal /dev/sda mklabel msdos
+
+# -------------------------------------- #
+# | boot [ext4] 500mb (arch-boot)
+# -------------------------------------- #
+parted -a optimal /dev/sda mkpart primary 1MiB 500MiB
+parted -a optimal /dev/sda set 1 boot on
+mkdir -p /mnt/boot
+mount /dev/sda1 /mnt/boot
+# pacman -Sy linux
+
+# LVM partition
+parted -a optimal /dev/sda mkpart primary 500MiB 100%
+pvcreate /dev/sda2
+
+# https://wiki.archlinux.org/index.php/LVM
+# https://wiki.archlinux.de/title/ArchLinux_mit_verschl%C3%BCsseltem_LVM_und_Systemd
+
+modprobe dm-crypt
+cryptsetup -c aes-xts-plain -y -s 512 luksFormat /dev/sda2
+cryptsetup luksOpen /dev/sda2 lvm
+pvcreate /dev/mapper/lvm
+vgcreate main /dev/mapper/lvm # Create main volume group
+vgchange -a y main # Activate volume group
+
+if [[ -f /etc/crypttab ]]; then
+  mv /etc/crypttab /etc/crypttab_$(date +%s).bak
+fi
+
+# / [ext4] 25gb luks (arch-core)
+#parted -a optimal /dev/sda mkpart extended 500MiB 25500MiB
+lvcreate -L 25GB -n root main
+mkfs.ext4 -L root /dev/mapper/main-root
+mount /dev/mapper/main-root /mnt
+#echo -e "main-root\t$(blkid /dev/mapper/main-root | awk '{print $3}' | tr -d '\"')\tnone\tluks" >> /etc/crypttab
+
+# /var [ext4] 10gb luks (arch-var)
+#parted -a optimal /dev/sda mkpart logical 25500MiB 35500MiB
+lvcreate -L 10GB -n var main
+mkfs.ext4 -L root /dev/mapper/main-var
+mkdir -p /mnt/var
+mount /dev/mapper/main-var /mnt/var
+#echo -e "main-var\t$(blkid /dev/mapper/main-var | awk '{print $3}' | tr -d '\"')\tnone\tluks" >> /etc/crypttab
+
+# /tmp [tmpfs] 500mb luks (arch-tmp)
+#parted -a optimal /dev/sda mkpart logical 45500MiB 46000MiB
+lvcreate -L 500MB -n tmp main
+mkfs.ext4 -L root /dev/mapper/main-tmp
+mkdir -p /mnt/tmp
+mount /dev/mapper/main-tmp /mnt/tmp
+#echo -e "main-tmp\t$(blkid /dev/mapper/main-tmp | awk '{print $3}' | tr -d '\"')\tnone\tluks" >> /etc/crypttab
+
+# swap [swap] 4gb luks (arch-swap)
+#parted -a optimal /dev/sda mkpart logical 46000MiB 50000MiB
+lvcreate -L 4GB -n swap main
+mkswap -L swap /dev/mapper/main-swap
+swapon /dev/mapper/main-swap
+
+# /home [ext4] 10gb per user luks (arch-home)
+#parted -a optimal /dev/sda mkpart logical 35500MiB 45500MiB
+lvcreate -L 10GB -n home main
+mkfs.ext4 -L root /dev/mapper/main-home
+mkdir -p /mnt/home
+mount /dev/mapper/main-home /mnt/home
+#echo -e "main-home\t$(blkid /dev/mapper/main-home | awk '{print $3}' | tr -d '\"')\tnone\tluks" >> /etc/crypttab
+
+# /pub [ext4] remaining % luks (arch-public)
+#parted -a optimal /dev/sda mkpart logical 50000MiB 100%
+lvcreate -l 100%FREE -n pub main
+mkfs.ext4 -L root /dev/mapper/main-pub
+mkdir -p /mnt/pub
+mount /dev/mapper/main-pub /mnt/pub
+#echo -e "main-pub\t$(blkid /dev/mapper/main-pub | awk '{print $3}' | tr -d '\"')\tnone\tluks" >> /etc/crypttab
+
+# Display status
+pvdisplay
+lvdisplay
+cat /etc/fstab
+cat /etc/crypttab
+
+# Mount boot
+mkfs.ext4 -L boot /dev/sda1
+mkdir -p /mnt/boot
+mount /dev/sda1 /mnt/boot
+
+# Overwrite pacman mirror
+echo 'Server = http://mirror.one.com/archlinux/$repo/os/$arch' > /etc/pacman.d/mirrorlist
+
+# Install basic system
+pacstrap -i /mnt base base-devel
+
+# Generate fstab
+genfstab -L /mnt > /mnt/etc/fstab
+cat /mnt/etc/fstab
+
+# Chroot into system
+arch-chroot /mnt /bin/bash
+
+pacman -Sy vim
+
+vim /etc/locale.gen
+# uncomment de_DE.UTF-8 UTF-8
+# uncomment en_GB.UTF-8 UTF-8
+
+# Generate german locale
+locale-gen
+
+# Write language to configs
+echo 'LANG=de_DE.UTF-8' > /etc/locale.conf
+
+echo 'KEYMAP=de-latin1-nodeadkeys' > /etc/vconsole.conf
+echo 'FONT=lat9w-16' >> /etc/vconsole.conf
+
+# Set TimeZone
+ln -sf /usr/share/zoneinfo/Europe/Berlin /etc/localtime
+
+# Setup hardwareclock
+hwclock --systohc --utc
+
+# Setup hostname
+echo 'arch-vbox' > /etc/hostname
+
+# Change root password
+passwd
+
+# Install bootloader (grub)
+pacman -S grub-bios
+
+# Add LVM to kernel params
+vim /etc/mkinitcpio.conf
+# HOOKS += encrypt lvm2
+
+mkinitcpio -p linux
+
+# http://unix.stackexchange.com/questions/199164/error-run-lvm-lvmetad-socket-connect-failed-no-such-file-or-directory-but
+vim /etc/lvm/lvm.conf
+# use_lvmetad = 0
+
+# https://wiki.archlinux.org/index.php/GRUB#LVM
+# https://wiki.archlinux.org/index.php/Dm-crypt/System_configuration#Mounting_at_boot_time
+vim /etc/default/grub
+# GRUB_CMDLINE_LINUX_DEFAULT="cryptdevice=/dev/sda2:lvm lang=de locale=de_DE.UTF-8"
+# GRUB_ENABLE_CRYPTODISK=y
+# GRUB_DISABLE_LINUX_UUID=true
+
+# Install grub to boot
+grub-install --recheck /dev/sda
+
+# Generate grub config
+grub-mkconfig -o /boot/grub/grub.cfg
+
+# Read https://wiki.archlinux.org/index.php/Systemd systemd-analyze(1)
+
+# REBOOT!
+reboot
+
+# Setup locale even more
+localectl set-keymap de-latin1-nodeadkeys
+localectl set-x11-keymap de-latin1-nodeadkeys
+localectl status
+
+# Enable and start dhcp
+systemctl enable dhcpcd.service
+dhcpcd
+
+# Add normal user
+useradd -m -G wheel -s /bin/bash arch
+passwd arch
+
+# Install sudo, git & wget
+pacman -Sy sudo git wget
+
+# https://wiki.archlinux.de/title/Sudo
+EDITOR=vim visudo
+# %wheel   ALL=(ALL) ALL
+
+# Install AUR
+# https://wiki.archlinux.org/index.php/AUR_helpers
+# https://wiki.archlinux.org/index.php/Arch_User_Repository
+# Install cower
+pacman -Sy yajl
+wget http://code.falconindy.com/archive/cower/cower-12.tar.gz
+tar zxvf cower-12.tar.gz
+cd cower-12
+wget https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=cower -o PKGBUILD
+gpg --recv-key $(cat PKGBUILD | grep validpgpkeys | awk -F "'" '{print $2}')
+makepkg -sri
+cd ..
+
+# Install pacaur
+wget https://github.com/rmarquis/pacaur/archive/4.2.27.tar.gz
+tar zxvf 4.2.27.tar.gz
+cd pacaur-4.2.27
+wget https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h=pacaur
+mv PKGBUILD?h=pacaur PKGBUILD
+makepkg -sri
+
+# Install window system
+pacman -Sy xorg-server xorg-xinit xorg-utils xorg-server-utils
+
+# Copy x11 initrc
+cp /etc/X11/xinit/xinitrc /home/arch/.xinitrc
+
+# Check /etc/X11/xorg.conf
+#$EDITOR /etc/X11/xorg.conf
+
+# Let NTP synchronize the time
+timedatectl set-ntp true
+
+# Install virtualbox guest utils
+rm /usr/bin/VBox*
+rm /usr/lib/VBox*
+
+pacman -Sy virtualbox-guest-utils
+modprobe -a vboxguest vboxsf vboxvideo
+echo "vboxguest" >> /etc/modules-load.d/virtualbox.conf
+echo "vboxsf" >> /etc/modules-load.d/virtualbox.conf
+echo "vboxvideo" >> /etc/modules-load.d/virtualbox.conf
+echo "/usr/bin/VBoxClient-all" >> /home/arch/.xinitrc
+
+# Install budgie
+pacaur -y budgie-desktop-aur
+vim /home/arch/.xinitrc
+# Add exec budgie-session to the bottom
