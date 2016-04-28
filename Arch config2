@@ -1,0 +1,1394 @@
+Information
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+- Arch Linux
+- GNOME
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% TODOs
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+- Mandatory Access Control
+- Minimal X for Hatebeat for StepMania and figure out file transfers
+- Hardware-specific graphics, hd-tweaks, and audio (hailrake) for other machines
+- Figure out MBR/Legacy unencrypted setups
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Initial
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Wireless
+%%%%%%%%%%%%%%%%%%%%
+
+iw dev
+
+wifi-menu -o 'wlp3s0'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Check Internet
+%%%%%%%%%%%%%%%%%%%%
+
+ping archlinux.org
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Set Time
+%%%%%%%%%%%%%%%%%%%%
+
+timedatectl set-ntp 'true'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% GPT/EFI Systems
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Create Partitions
+%%%%%%%%%%%%%%%%%%%%
+
+sgdisk --zap-all '/dev/sda'
+
+gdisk '/dev/sda'
+
+- n (create new partition)
+- 1 (partition number)
+- Enter (use default first sector)
+- +512MiB (last sector)
+- ef00 (partition type)
+
+- n (create new partition)
+- 2 (partition number)
+- Enter (use default first sector)
+- Enter (use default last sector)
+- 8e00 (partition type)
+
+- p (verify two partitions):
+1 512.0 MiB EF00 EFI System
+2 (remaining space) 8E00 Linux LVM
+
+- w (write changes to disk; confirm with y)
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Encryption (Hammerstorm, Spinecrack, Hailrake)
+%%%%%%%%%%%%%%%%%%%%
+
+cryptsetup -v -c 'aes-xts-plain64' -s '512' -h 'sha512' -i '5000' --use-random luksFormat '/dev/sda2'
+cryptsetup luksOpen '/dev/sda2' lvm
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Setup LVM
+%%%%%%%%%%%%%%%%%%%%
+
+pvcreate '/dev/mapper/lvm'
+vgcreate 'arch' '/dev/mapper/lvm'
+lvcreate -L 8GB 'arch' -n 'swap'
+lvcreate -l 100%FREE 'arch' -n 'root'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Format Partitions
+%%%%%%%%%%%%%%%%%%%%
+
+mkfs.fat -F32 '/dev/sda1'
+mkfs.xfs '/dev/mapper/arch-root'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Mount Partitions
+%%%%%%%%%%%%%%%%%%%%
+
+mkswap '/dev/mapper/arch-swap'
+swapon '/dev/mapper/arch-swap'
+
+mount '/dev/mapper/arch-root' '/mnt'
+mkdir -p '/mnt/boot'
+mount '/dev/sda1' '/mnt/boot'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% MBR/Legacy Unencrypted Systems
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Install
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Base Install
+%%%%%%%%%%%%%%%%%%%%
+
+pacstrap -i '/mnt' base base-devel
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Generate fstab
+%%%%%%%%%%%%%%%%%%%%
+
+genfstab -L '/mnt' >> '/mnt/etc/fstab'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% chroot
+%%%%%%%%%%%%%%%%%%%%
+
+arch-chroot '/mnt' '/bin/bash'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Set Locale
+%%%%%%%%%%%%%%%%%%%%
+
+nano '/etc/locale.gen'
+
+- Uncomment
+-------------------------
+en_US.UTF-8 UTF-8
+-------------------------
+
+locale-gen
+
+nano '/etc/locale.conf'
+
+-------------------------
+LANG=en_US.UTF-8
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Set Time
+%%%%%%%%%%%%%%%%%%%%
+
+ln -s '/usr/share/zoneinfo/America/New_York' '/etc/localtime'
+hwclock --systohc --utc
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Pacman
+%%%%%%%%%%%%%%%%%%%%
+
+nano '/etc/pacman.conf'
+
+- Uncomment
+-------------------------
+Color
+TotalDownload
+
+...
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+-------------------------
+
+- Add under Misc options
+-------------------------
+ILoveCandy
+-------------------------
+
+pacman -Syyu
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Root Password
+%%%%%%%%%%%%%%%%%%%%
+
+passwd
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Wifi (post-install)
+%%%%%%%%%%%%%%%%%%%%
+
+pacman -S iw wpa_supplicant dialog
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Intel Microcode
+%%%%%%%%%%%%%%%%%%%%
+
+pacman -S intel-ucode
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Finalize Install (GPT/EFI Encrypted Systems)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Initramfs
+%%%%%%%%%%%%%%%%%%%%
+
+nano '/etc/mkinitcpio.conf'
+
+- Add in-between 'block' and 'filesystems' hooks
+- Don't include encrypt if not using encryption
+-------------------------
+encrypt lvm2
+-------------------------
+
+- Add
+-------------------------
+COMPRESSION="cat"
+-------------------------
+
+mkinitcpio -p 'linux'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Boot Loader
+%%%%%%%%%%%%%%%%%%%%
+
+bootctl install
+
+nano '/boot/loader/entries/linux-kernel.conf'
+
+- Don't include intel-ucode if not using Intel
+- Don't include cryptdevice if not using encryption
+-------------------------
+title   Arch Linux (linux-kernel)
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+initrd  /intel-ucode.img
+options cryptdevice=/dev/sda2:lvm root=/dev/mapper/arch-root rw quiet
+-------------------------
+
+nano '/boot/loader/loader.conf'
+
+-------------------------
+timeout 3
+default linux-kernel
+editor  0
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Finalize Install (MBR/Legacy Unencrypted Systems)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+TODO
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Finish Up
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+sync
+exit
+umount -R '/mnt'
+reboot
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Post-Install
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% sp5100_tco Fix
+%%%%%%%%%%%%%%%%%%%%
+
+- Check dmesg; if flood of "No handler or method for GPE xx", do this
+- Likely only affects AMD APU (Spinecrack, Hailrake)
+
+https://bugzilla.kernel.org/show_bug.cgi?id=114201
+
+sudo -e '/etc/modprobe.d/blacklist.conf'
+
+-------------------------
+blacklist sp5100_tco
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Temp Internet (Ethernet)
+%%%%%%%%%%%%%%%%%%%%
+
+ip link
+
+dhcpcd 'enp3s0'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Temp Internet (Wirelss)
+%%%%%%%%%%%%%%%%%%%%
+
+iw dev
+
+wifi-menu -o 'wlp3s0'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Root Usage
+%%%%%%%%%%%%%%%%%%%%
+
+EDITOR=nano visudo
+
+- Uncomment
+-------------------------
+%wheel ALL=(ALL) ALL
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Nano as Default Editor
+%%%%%%%%%%%%%%%%%%%%
+
+sudo nano '/etc/sudoers.d/nano'
+
+-------------------------
+Defaults editor=/usr/bin/nano
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Let Nano Wrap Text
+%%%%%%%%%%%%%%%%%%%%
+
+sudo -e '/etc/nanorc'
+
+- Uncomment
+-------------------------
+set nowrap
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Create User
+%%%%%%%%%%%%%%%%%%%%
+
+useradd -m -G 'wheel' -s '/bin/bash' 'espionage724'
+passwd 'espionage724'
+chfn 'espionage724'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Software
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Initial
+%%%%%%%%%%%%%%%%%%%%
+
+sudo pacman -Syyu
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Core (GUI)
+%%%%%%%%%%%%%%%%%%%%
+
+sudo pacman -S xorg-server xf86-input-libinput mesa-libgl lib32-mesa-libgl cups
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% GNOME
+%%%%%%%%%%%%%%%%%%%%
+
+pacman -S gnome gnome-extra
+
+gnome: 1 5-6 8-10 12-13 15-22 24-26 28-31 36 40-42 46
+
+gnome-extra: 2 10 13-14 18-19 21 23 25 41-43 52
+add 6 for cd-burner (brasero), 7 for webcam (cheese) on gnome-extra
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Enable Services
+%%%%%%%%%%%%%%%%%%%%
+
+sudo systemctl enable NetworkManager gdm upower org.cups.cupsd
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Note
+%%%%%%%%%%%%%%%%%%%%
+
+- Reboot
+- From this point on, GNOME should be usable and usual GUI config process should work
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% General
+%%%%%%%%%%%%%%%%%%%%
+
+sudo pacman -S --needed firefox transmission-gtk lollypop perl-image-exiftool filezilla libreoffice-fresh nano aria2 openssh hplip htop hdparm wget p7zip mpv ffmpeg ffmpegthumbnailer libx264 gst-libav wine-staging winetricks lib32-libpulse lib32-gnutls ttf-freefont ttf-liberation ttf-arphic-uming ttf-baekmuk ttf-indic-otf ttf-khmer ttf-symbola ntp hunspell-en mesa-demos ufw
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Personal Machines
+%%%%%%%%%%%%%%%%%%%%
+
+android-tools android-udev gimp shotwell jre8-openjdk
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Hammerstorm
+%%%%%%%%%%%%%%%%%%%%
+
+xf86-video-amdgpu handbrake
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Hailrake
+%%%%%%%%%%%%%%%%%%%%
+
+alsa-tools
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Piety
+%%%%%%%%%%%%%%%%%%%%
+
+TODO: Flash Player
+
+gnome-boxes
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Master Password
+%%%%%%%%%%%%%%%%%%%%
+
+wget 'https://ssl.masterpasswordapp.com/masterpassword-gui.jar' -O ~/'Documents/masterpassword-gui.jar' && chmod +x ~/'Documents/masterpassword-gui.jar'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Settings Setup
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Keyboard
+%%%%%%%%%%%%%%%%%%%%
+
+gnome-terminal
+Ctrl + Alt + T
+
+java -jar '/home/espionage724/Documents/masterpassword-gui.jar'
+Ctrl + Alt + Z
+
+gnome-shell --replace
+Ctrl + Alt + \
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Network
+%%%%%%%%%%%%%%%%%%%%
+
+Indoor DNS: 192.168.1.158
+Outdoor DNS: https://www.opennicproject.org
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Printer
+%%%%%%%%%%%%%%%%%%%%
+
+http://localhost:631/admin
+
+HP Envy 4500 Series, hpcups (en)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Other Setup
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Files
+%%%%%%%%%%%%%%%%%%%%
+
+Sort folders before files and by type
+1GB file previews
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% gedit
+%%%%%%%%%%%%%%%%%%%%
+
+4 Tab length and use spaces instead of tabs
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Shotwell (MediaGoblin)
+%%%%%%%%%%%%%%%%%%%%
+
+Piwigo
+https://media.realmofespionage.xyz/api/piwigo/ws.php
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Transmission
+%%%%%%%%%%%%%%%%%%%%
+
+http://john.bitsurge.net/public/biglist.p2p.gz
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Hostname
+%%%%%%%%%%%%%%%%%%%%
+
+sudo hostnamectl set-hostname 'x'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% mpv
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+mkdir -p ~/'.config/mpv' && bash -c 'cat >  ~/".config/mpv/mpv.conf"' << EOF
+hwdec='vdpau'
+vo='opengl-hq'
+ao='pulse'
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% UFW
+%%%%%%%%%%%%%%%%%%%%
+
+sudo ufw reset && sudo ufw default deny && sudo ufw enable && sudo ufw logging off && sudo systemctl enable 'ufw'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Epiphany
+%%%%%%%%%%%%%%%%%%%%
+
+gsettings set org.gnome.Epiphany keyword-search-url "https://searx.me/?q=%s"
+
+gsettings set org.gnome.Epiphany keyword-search-url "https://startpage.com/do/search?q=%s"
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Secure Shell
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Deny Root Login over SSH
+%%%%%%%%%%%%%%%%%%%%
+
+sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/g' '/etc/ssh/sshd_config'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% SSH Enable
+%%%%%%%%%%%%%%%%%%%%
+
+sudo ufw allow from '192.168.1.1/24' to any port '22' && sudo systemctl enable 'sshd.socket' && sudo systemctl start 'sshd.socket'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Generate SSH Keys
+%%%%%%%%%%%%%%%%%%%%
+
+ssh-keygen -o -t 'ed25519'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Copy SSH PubKey
+%%%%%%%%%%%%%%%%%%%%
+
+ssh-copy-id 'espionage724@192.168.1.152'
+ssh-copy-id 'pi@192.168.1.158'
+ssh-copy-id 'espionage724@192.168.1.163'
+ssh-copy-id 'beowulfsdr@192.168.1.166'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Force PubKey Auth
+%%%%% (only do after copying ssh keys)
+%%%%%%%%%%%%%%%%%%%%
+
+sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication no/g' '/etc/ssh/sshd_config'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Machine Key Labels
+%%%%%%%%%%%%%%%%%%%%
+
+ssh 'espionage724@192.168.1.152'
+ssh 'pi@192.168.1.158'
+ssh 'espionage724@192.168.1.163'
+ssh 'beowulfsdr@192.168.1.166'
+
+nano ~/'.ssh/authorized_keys'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Environment Variables
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% ATI/AMD GPU Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/etc/profile.d/custom.sh"' << EOF
+# Radeon Tweaks
+export R600_DEBUG='sbcl,hyperz,llvm,sisched,forcedma'
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Swappiness
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/sysctl.d/swappiness.conf"' << EOF
+vm.swappiness = 10
+vm.vfs_cache_pressure = 50
+EOF
+-------------------------
+
+cat '/proc/sys/vm/swappiness'
+cat '/proc/sys/vm/vfs_cache_pressure'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Kernel Hardening
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/sysctl.d/harden.conf"' << EOF
+kernel.dmesg_restrict = 1
+kernel.kptr_restrict = 1
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Disable Wayland on GDM
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/etc/gdm/custom.conf"' << EOF
+[daemon]
+WaylandEnable=false
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Hammerstorm (desktop)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Graphics
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo systemctl mask 'colord' && sudo bash -c 'cat > "/usr/share/X11/xorg.conf.d/99-graphics.conf"' << EOF
+Section "Device"
+    Identifier      "Caribbean Islands"
+    Driver          "amdgpu"
+    Option          "DRI"           "3"
+    Option          "TearFree"      "true"
+EndSection
+
+Section "Monitor"
+    Identifier      "HDMI-A-0"
+    Gamma           0.8
+EndSection
+
+Section "Monitor"
+    Identifier      "DVI-D-0"
+    Gamma           0.8
+EndSection
+
+Section "Monitor"
+    Identifier      "DVI-I-1"
+    Gamma           0.8
+EndSection
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% GDM Monitor Conf Copy
+%%%%%%%%%%%%%%%%%%%%
+
+sudo mkdir -p ~gdm/'.config' && sudo cp ~/'.config/monitors.xml' ~gdm/'.config/monitors.xml'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -J '0' --please-destroy-my-drive '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Spinecrack (laptop)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Graphics
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo systemctl mask 'colord' && sudo bash -c 'cat > "/usr/share/X11/xorg.conf.d/99-graphics.conf"' << EOF
+Section "Device"
+    Identifier      "Northern Islands"
+    Driver          "modesetting"
+EndSection
+
+Section "Monitor"
+    Identifier      "eDP-1"
+    Gamma           0.8
+EndSection
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -J '0' --please-destroy-my-drive '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Corsair Mouse Quirk
+%%%%%%%%%%%%%%%%%%%%
+
+sudo sed -i 's/quiet/quiet usbhid.quirks=0x1B1C:0x1B22:0x20000000/g' '/boot/loader/entries/linux-kernel.conf'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Hailrake (2-in-1)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Graphics
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/share/X11/xorg.conf.d/99-graphics.conf"' << EOF
+Section "Device"
+    Identifier      "Sea Islands"
+    Driver          "modesetting"
+EndSection
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Volume Increase
+%%%%%%%%%%%%%%%%%%%%
+
+TODO: Fix
+
+sudo -e '/usr/lib/systemd/system/bass.service' && sudo systemctl daemon-reload && sudo systemctl enable bass
+
+-------------------------
+[Unit]
+Description=Bass enable and gain increase
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hda-verb' '/dev/snd/hwC1D0' 0x1a 0x782 0x61
+ExecStart='/usr/bin/hda-verb' '/dev/snd/hwC1D0' 0x1a 0x773 0x2d
+
+[Install]
+WantedBy=multi-user.target
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Piety (mom's laptop)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Graphics
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo systemctl mask 'colord' && sudo bash -c 'cat > "/usr/share/X11/xorg.conf.d/99-graphics.conf"' << EOF
+Section "Device"
+    Identifier      "Haswell"
+    Driver          "modesetting"
+EndSection
+
+Section "Monitor"
+    Identifier      "eDP-1"
+    Gamma           0.8
+EndSection
+EOF
+----------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -J '0' --please-destroy-my-drive '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Hatebeat (StepMania)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Graphics
+%%%%%%%%%%%%%%%%%%%%
+
+TODO: Verify monitor name
+
+-------------------------
+sudo bash -c 'cat > "/usr/share/X11/xorg.conf.d/99-graphics.conf"' << EOF
+Section "Device"
+    Identifier      "R600"
+    Driver          "modesetting"
+EndSection
+
+Section "Monitor"
+    Identifier      "DVI-D-0"
+    Modeline        "640x480_120.00"  52.41  640 680 744 848  480 481 484 515  -HSync +Vsync
+EndSection
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -M '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Oak (server)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -J '0' --please-destroy-my-drive '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Kraityn (server)
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% hdparm Tweaks
+%%%%%%%%%%%%%%%%%%%%
+
+TODO: Verify
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hd-tweak.service"' << EOF
+[Unit]
+Description=hdparm Tweaks
+
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/hdparm' -A '1' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -B '255' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -J '0' --please-destroy-my-drive '/dev/sda'
+ExecStart='/usr/bin/hdparm' -S '0' '/dev/sda'
+ExecStart='/usr/bin/hdparm' -W '1' '/dev/sda'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hd-tweak' && sudo systemctl start 'hd-tweak' && sudo systemctl status 'hd-tweak' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Zen Kernel
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Install
+%%%%%%%%%%%%%%%%%%%%
+
+sudo pacman -S 'linux-zen'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Boot Entry (GPT/EFI Encypted Systems)
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/boot/loader/entries/zen-kernel.conf"' << EOF
+title   Arch Linux (zen-kernel)
+linux   /vmlinuz-linux-zen
+initrd  /initramfs-linux-zen.img
+options cryptdevice=/dev/sda2:lvm root=/dev/mapper/arch-root rw quiet
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Corsair Mouse Quirk
+%%%%%%%%%%%%%%%%%%%%
+
+sudo sed -i 's/quiet/quiet usbhid.quirks=0x1B1C:0x1B22:0x20000000/g' '/boot/loader/entries/zen-kernel.conf'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Boot Entry (Piety)
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/boot/loader/entries/zen-kernel.conf"' << EOF
+title   Arch Linux (zen-kernel)
+linux   /vmlinuz-linux-zen
+initrd  /initramfs-linux-zen.img
+initrd  /intel-ucode.img
+options root=/dev/mapper/arch-root rw quiet
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Boot Entry (MBR/Legacy Unencrypted Systems)
+%%%%%%%%%%%%%%%%%%%%
+
+TODO
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% zen-kernel Default (GPT/EFI Systems)
+%%%%%%%%%%%%%%%%%%%%
+
+sudo sed -i 's/default linux-kernel/default zen-kernel/g' '/boot/loader/loader.conf'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% zen-kernel Default (MBR/Legacy Systems)
+%%%%%%%%%%%%%%%%%%%%
+
+TODO
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Verify Scheduler
+%%%%%%%%%%%%%%%%%%%%
+
+sudo dmesg | grep 'scheduler'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% PulseAudio
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Config
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+bash -c 'cat > ~/".config/pulse/daemon.conf"' << EOF
+resample-method = soxr-mq
+flat-volumes = no
+deferred-volume-safety-margin-usec = 1
+EOF
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Volume (Output)
+%%%%%%%%%%%%%%%%%%%%
+
+pactl list 'short' 'sinks'
+
+pactl set-sink-mute '1' '0'
+pactl set-sink-volume '1' 60%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Volume (Input)
+%%%%%%%%%%%%%%%%%%%%
+
+pactl list 'short' 'sources'
+
+pactl set-source-mute '2' '0'
+pactl set-source-volume '2' 35%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Automatic Updates
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Notes
+%%%%%%%%%%%%%%%%%%%%
+
+- Copy this into text editor and change OnCalendar
+- TODO: Figure out some way to alert something on failure
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Services
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/arch-up.service"' << EOF
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/pacman' -Sc --noconfirm
+ExecStart='/usr/bin/pacman' -Syyu --noconfirm
+ExecStart='/usr/bin/sync'
+EOF
+sudo bash -c 'cat > "/usr/lib/systemd/system/arch-up.timer"' << EOF
+[Unit]
+Description=Daily pacman sync and update
+
+[Timer]
+OnCalendar=*-*-* 05:x0:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'arch-up.timer' && sudo systemctl start 'arch-up.timer'
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Update Times
+%%%%%%%%%%%%%%%%%%%%
+
+- Hammerstorm:  05:00:00
+- Spinecrack:   05:10:00
+- Hailrake:     05:20:00
+- Piety:        05:30:00
+- Hatebeat:     05:40:00
+- Thistlesage:  05:50:00
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Steven Black's Unified Hosts File
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Services
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/hosts-up.service"' << EOF
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/wget' 'https://github.com/StevenBlack/hosts/archive/master.zip' -O '/tmp/master.zip'
+ExecStart='/usr/bin/unzip' '/tmp/master.zip' -d '/tmp'
+ExecStart='/usr/bin/python3' '/tmp/hosts-master/updateHostsFile.py' --auto --replace
+ExecStart='/usr/bin/rm' -R '/tmp/master.zip' '/tmp/hosts-master'
+ExecStart='/usr/bin/sync'
+EOF
+sudo bash -c 'cat > "/usr/lib/systemd/system/hosts-up.timer"' << EOF
+[Unit]
+Description=Weekly hosts source refresh
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'hosts-up.timer' && sudo systemctl start 'hosts-up' 'hosts-up.timer' && sudo systemctl status 'hosts-up' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% XFS Defragmentation
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% One-time
+%%%%%%%%%%%%%%%%%%%%
+
+sudo xfs_fsr '/dev/mapper/arch-root'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Services
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+sudo bash -c 'cat > "/usr/lib/systemd/system/xfs-m.service"' << EOF
+[Service]
+Type=oneshot
+ExecStart='/usr/bin/xfs_fsr' '/dev/mapper/arch-root'
+ExecStart='/usr/bin/sync'
+EOF
+sudo bash -c 'cat > "/usr/lib/systemd/system/xfs-m.timer"' << EOF
+[Unit]
+Description=Weekly XFS Defrag
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable 'xfs-m.timer' && sudo systemctl start 'xfs-m' 'xfs-m.timer' && sudo systemctl status 'xfs-m' -l
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Firefox Setup
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% about:config
+%%%%%%%%%%%%%%%%%%%%
+
+-------------------------
+bash -c 'cat >  ~/"user.js"' << EOF
+user_pref("media.mp3.enabled", true);
+user_pref("layout.frame_rate.precise", true);
+user_pref("mousewheel.min_line_scroll_amount", 40);
+user_pref("javascript.options.mem.high_water_mark", 32);
+user_pref("javascript.options.mem.max", 51200);
+user_pref("dom.storage.enabled", true);
+user_pref("dom.event.clipboardevents.enabled", true);
+user_pref("media.fragmented-mp4.exposed", true);
+user_pref("media.fragmented-mp4.ffmpeg.enabled", true);
+user_pref("media.mediasource.ignore_codecs", true);
+user_pref("layers.acceleration.force-enabled", true);
+user_pref("layers.offmainthreadcomposition.enabled", true);
+EOF
+mv ~/'user.js' ~/'.mozilla/firefox/'*'.default'
+-------------------------
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Extenstions (7)
+%%%%%%%%%%%%%%%%%%%%
+
+xdg-open 'https://addons.mozilla.org/en-US/firefox/addon/privacy-settings/versions' && xdg-open 'https://www.eff.org/privacybadger' && xdg-open 'https://addons.mozilla.org/en-US/firefox/addon/ublock-origin/versions' && xdg-open 'https://addons.mozilla.org/en-US/firefox/addon/gnotifier/versions' && xdg-open 'https://addons.mozilla.org/en-US/firefox/addon/decentraleyes/versions' && xdg-open 'https://www.eff.org/https-everywhere' && xdg-open 'https://addons.mozilla.org/en-US/firefox/addon/disable-hello-pocket-reader/versions'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Extensions Configuration
+%%%%%%%%%%%%%%%%%%%%
+
+- uBlock filters (disable EasyList + EasyPrivacy, enable Easy+Fanboy Ultimate + both Adblock killers)
+- Full privacy with Privacy Settings button
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Search Engines
+%%%%%%%%%%%%%%%%%%%%
+
+https://searx.me/about#
+https://startpage.com/eng/download-startpage-plugin.html?hmb=1
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Noteable Folders and Commands
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Shortcuts
+%%%%%%%%%%%%%%%%%%%%
+
+/usr/share/applications
+~/.local/share/applications
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Icons
+%%%%%%%%%%%%%%%%%%%%
+
+/usr/share/icons/hicolor
+~/.local/share/icons/hicolor
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% systemd Scripts
+%%%%%%%%%%%%%%%%%%%%
+
+/etc/systemd/system
+/usr/lib/systemd/system
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Check CPU Frequency
+%%%%%%%%%%%%%%%%%%%%
+
+grep 'MHz' '/proc/cpuinfo'
+watch -n 0.1 grep \'cpu MHz\' '/proc/cpuinfo'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Encryption Info
+%%%%%%%%%%%%%%%%%%%%
+
+sudo cryptsetup luksDump '/dev/sda2'
+
+sudo cryptsetup status '/dev/mapper/lvm'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Hard Drive Wipe
+%%%%%%%%%%%%%%%%%%%%
+
+- Make sure to change sda if not wanting to do sda
+
+sudo hdparm -I '/dev/sda' | grep 'not'
+sudo hdparm --user-master u --security-set-pass 'x' '/dev/sda'
+sudo hdparm --user-master u --security-erase-enhanced 'x' '/dev/sda'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Xorg Log
+%%%%%%%%%%%%%%%%%%%%
+
+journalctl -e _COMM='gdm-x-session'
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Get GCC Compile Flags
+%%%%%%%%%%%%%%%%%%%%
+
+gcc -v -E -x c -march=native -mtune=native - < /dev/null 2>&1 | grep cc1 | perl -pe 's/ -mno-\S+//g; s/^.* - //g;'
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%
+%%%%% Privacy
+%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%
+%%%%% Remove metadata
+%%%%%%%%%%%%%%%%%%%%
+
+exiftool -all= *.* -overwrite_original
